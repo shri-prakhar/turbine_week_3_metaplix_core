@@ -1,7 +1,10 @@
 use anchor_lang::prelude::*;
 use mpl_core::{
     instructions::CreateV2CpiBuilder,
-    types::{Attribute, Attributes, BurnDelegate, FreezeDelegate, Plugin, PluginAuthority, PluginAuthorityPair},
+    types::{
+        Attribute, Attributes, BurnDelegate, FreezeDelegate, Plugin, PluginAuthority,
+        PluginAuthorityPair,
+    },
     ID as CORE_PROGRAM_ID,
 };
 

@@ -48,7 +48,6 @@ impl<'info> CreateCollection<'info> {
         args: CreateCollectionArgs,
         bumps: &CreateCollectionBumps,
     ) -> Result<()> {
-
         self.collection_authority.set_inner(CollectionAuthority {
             bump: bumps.collection_authority,
             creator: self.creator.key(),

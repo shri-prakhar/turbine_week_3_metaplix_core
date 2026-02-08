@@ -23,7 +23,7 @@ impl WhitelistedCreators {
 
         // Check if already whitelisted
         if self.contains(creator) {
-            return err!(MPLXCoreError::CreatorAlreadyWhitelisted)
+            return err!(MPLXCoreError::CreatorAlreadyWhitelisted);
         }
 
         // Add the creator at the current num_creators index

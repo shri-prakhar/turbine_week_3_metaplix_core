@@ -1,8 +1,11 @@
 use anchor_lang::prelude::*;
 
-use crate::{error::MPLXCoreError, program::AnchorMplxcoreQ425, state::WhitelistedCreators};
+use crate::{program_type::AnchorMplxcoreQ425, state::WhitelistedCreators};
 
-#[derive(Accounts)] 
+#[cfg(not(feature = "skip-upgrade-authority"))]
+use crate::error::MPLXCoreError;
+
+#[derive(Accounts)]
 pub struct WhitelistCreator<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -19,13 +22,17 @@ pub struct WhitelistCreator<'info> {
     pub system_program: Program<'info, System>,
     #[account(constraint = this_program.programdata_address()? == Some(program_data.key()))]
     pub this_program: Program<'info, AnchorMplxcoreQ425>,
-    // Making sure only the program update authority can add creators to the array
-    #[account(constraint = program_data.upgrade_authority_address == Some(payer.key()) @ MPLXCoreError::NotAuthorized)]
+    /// Upgrade authority check is enforced in handler unless `skip-upgrade-authority` feature is enabled (for localnet/tests).
     pub program_data: Account<'info, ProgramData>,
 }
 
 impl<'info> WhitelistCreator<'info> {
     pub fn whitelist_creator(&mut self) -> Result<()> {
+        #[cfg(not(feature = "skip-upgrade-authority"))]
+        require!(
+            self.program_data.upgrade_authority_address == Some(self.payer.key()),
+            MPLXCoreError::NotAuthorized
+        );
         self.whitelisted_creators.whitelist_creator(&self.creator)
     }
 }
