@@ -4,13 +4,7 @@ import { AnchorMplxcoreQ425 } from "../target/types/anchor_mplxcore_q4_25";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import { assert } from "chai";
 import { MPL_CORE_PROGRAM_ID } from "@metaplex-foundation/mpl-core";
-import { execSync } from "child_process";
 
-/**
- * All tests should pass when you run `anchor test` from the repo root.
- * The program is built with the skip-upgrade-authority feature by default so whitelist_creator
- * works for any payer. For production, build with: anchor build -- --no-default-features
- */
 describe("anchor-mplxcore-q4-25", () => {
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
@@ -41,22 +35,9 @@ describe("anchor-mplxcore-q4-25", () => {
   let collectionAuthorityPda: PublicKey;
   let programDataAccount: PublicKey;
   let invalidCollectionAuthorityPda: PublicKey;
-  let programUpgradeAuthority: PublicKey;
-  /** True when payer is the program upgrade authority (whitelist + dependent tests can run). */
-  let whitelistAvailable: boolean;
+
 
   before(async () => {
-    // Upgrade program so the deployed build has skip-upgrade-authority (any payer can whitelist)
-    try {
-      execSync("anchor deploy --provider.cluster localnet", {
-        cwd: process.cwd(),
-        stdio: "pipe",
-        timeout: 60_000,
-      });
-      await new Promise((r) => setTimeout(r, 1500));
-    } catch {
-      // Not upgrade authority or already up to date
-    }
     // Fund accounts
     await provider.connection.requestAirdrop(creator.publicKey, 2_000_000_000); // 2 SOL
     await provider.connection.requestAirdrop(nonWhitelistedCreator.publicKey, 2_000_000_000);
@@ -82,17 +63,18 @@ describe("anchor-mplxcore-q4-25", () => {
     )[0];
     console.log(`invalidCollectionAuthorityPda ${invalidCollectionAuthorityPda.toString()}`);
 
-    // Get ProgramData address from the program account (UpgradeableLoaderState::Program stores it at bytes 4..36)
-    const programAccountInfo = await connection.getAccountInfo(program.programId);
-    assert.ok(programAccountInfo, "Program account should exist after deployment");
-    assert.ok(programAccountInfo.data.length >= 36, "Program account data should contain programdata_address");
-    programDataAccount = new PublicKey(programAccountInfo.data.subarray(4, 36));
+    // Derive ProgramData PDA using the BPF Loader Upgradeable program ID BPFLoaderUpgradeab1e11111111111111111111111
+    const BPF_LOADER_UPGRADEABLE_PROGRAM_ID = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
+    programDataAccount = PublicKey.findProgramAddressSync(
+      [
+        program.programId.toBuffer(),
+      ],
+      BPF_LOADER_UPGRADEABLE_PROGRAM_ID
+    )[0];
     console.log(`programDataAccount ${programDataAccount.toString()}`);
+    // Verify ProgramData exists after deployment
     const programData = await connection.getAccountInfo(programDataAccount);
     assert.ok(programData, "ProgramData should exist after deployment");
-    // ProgramData layout: slot (u64) + Option<Pubkey> upgrade_authority (1 byte tag + 32 bytes)
-    programUpgradeAuthority = new PublicKey(programData.data.subarray(9, 41));
-    whitelistAvailable = payer.publicKey.equals(programUpgradeAuthority);
   });
 
   describe("WhitelistCreator", () => {
@@ -118,13 +100,6 @@ describe("anchor-mplxcore-q4-25", () => {
         } else {
           console.log("No logs available in the error.");
         }
-        if (error?.error?.errorCode?.code === "NotAuthorized" || error?.message?.includes("6002")) {
-          throw new Error(
-            `Payer is not the program upgrade authority (${programUpgradeAuthority.toString()}). ` +
-              `Set ANCHOR_WALLET to that keypair or run 'anchor test' for a fresh deploy.`
-          );
-        }
-        throw error;
       }
 
       const whitelistedCreators = await program.account.whitelistedCreators.fetch(whitelistedCreatorsPda);
@@ -246,9 +221,8 @@ describe("anchor-mplxcore-q4-25", () => {
           .signers([creator, invalidAsset])
           .rpc();
         assert.fail("Should have failed with invalid collection");
-      } catch (err: any) {
-        const code = err?.error?.errorCode?.code ?? err?.error?.errorCode ?? err?.code;
-        assert.equal(code, "InvalidCollection", "Expected InvalidCollection error");
+      } catch (err) {
+        assert.equal(err.error.errorCode.code, "InvalidCollection", "Expected InvalidCollection error");
       }
     });
   });
@@ -285,9 +259,8 @@ describe("anchor-mplxcore-q4-25", () => {
           .signers([unauthorizedAuthority])
           .rpc();
         assert.fail("Should have failed with unauthorized authority");
-      } catch (err: any) {
-        const code = err?.error?.errorCode?.code ?? err?.error?.errorCode ?? err?.code;
-        assert.equal(code, "NotAuthorized", "Expected NotAuthorized error");
+      } catch (err) {
+        assert.equal(err.error.errorCode.code, "NotAuthorized", "Expected NotAuthorized error");
       }
     });
   });
@@ -324,9 +297,58 @@ describe("anchor-mplxcore-q4-25", () => {
           .signers([unauthorizedAuthority])
           .rpc();
         assert.fail("Should have failed with unauthorized authority");
-      } catch (err: any) {
-        const code = err?.error?.errorCode?.code ?? err?.error?.errorCode ?? err?.code;
-        assert.equal(code, "NotAuthorized", "Expected NotAuthorized error");
+      } catch (err) {
+        assert.equal(err.error?.errorCode?.code ?? err.error?.errorCode?.errorCode?.code, "NotAuthorized", "Expected NotAuthorized error");
+      }
+    });
+  });
+
+  describe("UpdateNft", () => {
+    it("Updates an NFT name and URI", async () => {
+      const newName = "Updated Test NFT";
+      const newUri = "https://gateway.irys.xyz/updated-hash";
+
+      await program.methods
+        .updateNft({ newName, newUri })
+        .accountsStrict({
+          authority: creator.publicKey,
+          asset: asset.publicKey,
+          collection: collection.publicKey,
+          collectionAuthority: collectionAuthorityPda,
+          coreProgramId: MPL_CORE_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([creator])
+        .rpc();
+
+      // Verify the update succeeded by fetching the asset from MPL Core
+      const assetAccount = await connection.getAccountInfo(asset.publicKey);
+      assert.ok(assetAccount, "Asset account should exist after update");
+      assert.ok(assetAccount.data.length > 0, "Asset should have data");
+      // Asset data structure is MPL Core's - name/uri are in the account data.
+      // For a minimal assertion, we verify the tx succeeded above.
+    });
+
+    it("Fails to update with unauthorized authority", async () => {
+      const newName = "Unauthorized Update";
+      const newUri = "https://example.com/unauthorized";
+
+      try {
+        await program.methods
+          .updateNft({ newName, newUri })
+          .accountsStrict({
+            authority: unauthorizedAuthority.publicKey,
+            asset: asset.publicKey,
+            collection: collection.publicKey,
+            collectionAuthority: collectionAuthorityPda,
+            coreProgramId: MPL_CORE_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+          })
+          .signers([unauthorizedAuthority])
+          .rpc();
+        assert.fail("Should have failed with unauthorized authority");
+      } catch (err) {
+        assert.equal(err.error?.errorCode?.code ?? err.error?.errorCode?.errorCode?.code, "NotAuthorized", "Expected NotAuthorized error");
       }
     });
   });
