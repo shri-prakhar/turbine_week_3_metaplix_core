@@ -15,12 +15,12 @@ url = "https://api.apr.dev"
 cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
-# Clone MPL Core from mainnet so CreateCollection/Mint/Freeze/Thaw CPIs work on localnet
 [test]
-startup_wait = 10000
+startup_wait = 45000
 
 [test.validator]
 url = "https://api.mainnet-beta.solana.com"
+bind_address = "127.0.0.1"
 
 [[test.validator.clone]]
 address = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"

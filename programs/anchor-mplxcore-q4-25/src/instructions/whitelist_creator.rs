@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{program_type::AnchorMplxcoreQ425, state::WhitelistedCreators};
+use crate::{program::AnchorMplxcoreQ425, state::WhitelistedCreators};
 
 #[cfg(not(feature = "skip-upgrade-authority"))]
 use crate::error::MPLXCoreError;

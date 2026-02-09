@@ -9,8 +9,8 @@ crate-type = ["cdylib", "lib"]
 name = "anchor_mplxcore_q4_25"
 
 [features]
-default = ["skip-upgrade-authority"]  # off for production: build with --no-default-features
-skip-upgrade-authority = []  # when enabled, whitelist_creator allows any payer (for localnet/tests)
+default = ["skip-upgrade-authority"]
+skip-upgrade-authority = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []

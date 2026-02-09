@@ -9,6 +9,6 @@ signer "payer" "svm::web_wallet" {
 
 signer "authority" "svm::web_wallet" {
     description = "Can upgrade programs and manage critical ops"
-    // expected_address = input.expected_payer_address
+    expected_address = input.expected_payer_address
     // See documentation for other options (squads, etc): https://docs.surfpool.run/iac/svm/signers
 }

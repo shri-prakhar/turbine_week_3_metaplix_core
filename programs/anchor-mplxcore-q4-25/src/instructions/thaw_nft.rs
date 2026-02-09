@@ -48,7 +48,10 @@ impl<'info> ThawNft<'info> {
 
         UpdatePluginV1CpiBuilder::new(&self.core_program_id.to_account_info())
             .asset(&self.asset.to_account_info())
+            .collection(Some(&self.collection.to_account_info()))
             .authority(Some(&self.collection_authority.to_account_info()))
+            .payer(&self.authority.to_account_info())
+            .system_program(&self.system_program.to_account_info())
             .plugin(Plugin::FreezeDelegate(FreezeDelegate { frozen: false }))
             .invoke_signed(signer_seeds)?;
 
